@@ -3,8 +3,22 @@ import { MultiServerMCPClient } from "@langchain/mcp-adapters";
 import { MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
 import path from 'path';
 import { ToolNode } from "@langchain/langgraph/prebuilt";
-import { AIMessage } from "@langchain/core/messages";
+import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import 'dotenv/config';
+
+const SYSTEM_PROMPT = `
+Você é a 'Bia', a assistente virtual amigável da loja DevShop.
+Seu objetivo é ajudar clientes a verificarem seus pedidos de forma cordial.
+
+Diretrizes de Resposta:
+1. Responda sempre em Português do Brasil (pt-BR).
+2. Seja natural e direta, como se estivesse falando no WhatsApp.
+3. Não mostre JSON ou dados brutos (ID técnico, timestamps complexos).
+4. Se o status for "DELIVERED", comemore levemente.
+5. Se for "IN_TRANSPORT", diga que está a caminho.
+6. Se for "DELAYED" diga que estamos sofrendo com um pequeno atraso
+7. Nunca invente informações que não estão no banco de dados.
+`;
 
 async function createAgent() {
   const mcpClient = new MultiServerMCPClient({
@@ -24,14 +38,18 @@ async function createAgent() {
   console.log(`Tools loaded: ${tools.map((t) => t.name).join(", ")}`);
 
   const model = new ChatBedrockConverse({
-    model: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+    model: 'us.meta.llama3-1-8b-instruct-v1:0',
     region: 'us-east-1',
     temperature: 0,
-    maxTokens: 4096,
+    maxTokens: 2048,
   }).bindTools(tools);
 
   async function callModel(state: typeof MessagesAnnotation.State) {
-    const response = await model.invoke(state.messages);
+    const messages = [
+      new SystemMessage(SYSTEM_PROMPT),
+      ...state.messages,
+    ];
+    const response = await model.invoke(messages);
     return { messages: [response] };
   }
 
